@@ -1,0 +1,105 @@
+{
+  "timestamp": "2026-05-29 18:58:51",
+  "config": {
+    "img_size": 224,
+    "batch_size": 32,
+    "class_names": [
+      "adenocarcinoma",
+      "large.cell.carcinoma",
+      "squamous.cell.carcinoma",
+      "normal"
+    ],
+    "epochs_initial": 50,
+    "epochs_finetune": 30,
+    "initial_lr": 0.001,
+    "finetune_lr": 1e-05,
+    "label_smoothing": 0.1,
+    "dropout_rate": 0.5,
+    "l2_reg": 0.0001,
+    "class_weights": {
+      "0": 1.0,
+      "1": 1.1,
+      "2": 0.989,
+      "3": 1.035
+    }
+  },
+  "phase1_history": [],
+  "phase2_history": [],
+  "phase1_summary": {
+    "best_val_accuracy": 0.7639,
+    "epochs_run": 42
+  },
+  "phase2_summary": {
+    "best_val_accuracy": 0.8333,
+    "epochs_run": 10
+  },
+  "evaluation": {
+    "test_loss": 0.7216,
+    "test_accuracy": 0.7111,
+    "classification_report": {
+      "adenocarcinoma": {
+        "precision": 0.7613636363636364,
+        "recall": 0.5583333333333333,
+        "f1-score": 0.6442307692307693,
+        "support": 120.0
+      },
+      "large.cell.carcinoma": {
+        "precision": 0.4666666666666667,
+        "recall": 0.9607843137254902,
+        "f1-score": 0.6282051282051282,
+        "support": 51.0
+      },
+      "squamous.cell.carcinoma": {
+        "precision": 0.7971014492753623,
+        "recall": 0.6111111111111112,
+        "f1-score": 0.6918238993710691,
+        "support": 90.0
+      },
+      "normal": {
+        "precision": 1.0,
+        "recall": 0.9814814814814815,
+        "f1-score": 0.9906542056074766,
+        "support": 54.0
+      },
+      "accuracy": 0.7111111111111111,
+      "macro avg": {
+        "precision": 0.7562829380764163,
+        "recall": 0.777927559912854,
+        "f1-score": 0.7387285006036107,
+        "support": 315.0
+      },
+      "weighted avg": {
+        "precision": 0.764770688248949,
+        "recall": 0.7111111111111111,
+        "f1-score": 0.7146210536265201,
+        "support": 315.0
+      }
+    },
+    "confusion_matrix": [
+      [
+        67,
+        41,
+        12,
+        0
+      ],
+      [
+        0,
+        49,
+        2,
+        0
+      ],
+      [
+        20,
+        15,
+        55,
+        0
+      ],
+      [
+        1,
+        0,
+        0,
+        53
+      ]
+    ]
+  }
+}

@@ -47,8 +47,8 @@ L2_REG = 1e-4
 # 类别权重（基于训练集样本数计算：总样本数/(类别数*该类样本数)）
 # adenocarcinoma: 195, large.cell.carcinoma: 115, squamous: 155, normal: 148
 CLASS_WEIGHTS = {
-    0: 0.786,  # adenocarcinoma (195 样本)
-    1: 1.333,  # large.cell.carcinoma (115 样本)
+    0: 1.000,  # adenocarcinoma (195 样本) — 提高权重，缓解被误判为 large cell
+    1: 1.100,  # large.cell.carcinoma (115 样本)
     2: 0.989,  # squamous.cell.carcinoma (155 样本)
     3: 1.035   # normal (148 样本)
 }

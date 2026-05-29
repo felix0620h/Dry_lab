@@ -1,5 +1,6 @@
 # train.py
 import tensorflow as tf
+import keras
 from keras.callbacks import EarlyStopping, ModelCheckpoint
 from config import (
     EPOCHS_INITIAL, EPOCHS_FINETUNE, INITIAL_LR, FINETUNE_LR, MIN_LR,
@@ -12,6 +13,7 @@ from model import build_model
 tf.random.set_seed(RANDOM_SEED)
 
 
+@keras.saving.register_keras_serializable(package="CustomLR")
 class WarmupCosineDecay(tf.keras.optimizers.schedules.LearningRateSchedule):
     """带 warmup 的余弦退火学习率调度"""
     def __init__(self, initial_lr, target_lr, warmup_steps, total_steps):

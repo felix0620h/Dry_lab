@@ -7,6 +7,7 @@ from keras.models import load_model
 import keras
 from config import MODEL_FINETUNE_PATH, MODEL_INITIAL_PATH, CLASS_NAMES
 from data_loader import create_generators
+from train import WarmupCosineDecay  # 注册自定义学习率调度器
 
 
 def plot_history(history, title_suffix=""):
@@ -42,12 +43,22 @@ def evaluate():
 
     # 加载最佳微调模型（如果不存在则尝试初始模型）
     try:
-        model = load_model(MODEL_FINETUNE_PATH)
+        model = load_model(MODEL_FINETUNE_PATH, compile=False)
+        model.compile(
+            optimizer='adam',
+            loss='categorical_crossentropy',
+            metrics=['accuracy']
+        )
         print(f"加载模型: {MODEL_FINETUNE_PATH}")
     except:
         print(f"未找到 {MODEL_FINETUNE_PATH}，尝试加载初始模型")
         try:
-            model = load_model(MODEL_INITIAL_PATH)
+            model = load_model(MODEL_INITIAL_PATH, compile=False)
+            model.compile(
+                optimizer='adam',
+                loss='categorical_crossentropy',
+                metrics=['accuracy']
+            )
         except:
             model = load_model("best_model_initial.h5")
 
@@ -63,6 +74,7 @@ def evaluate():
 
     # 分类报告
     print("\n分类报告:")
+    report_dict = classification_report(y_true, y_pred, target_names=CLASS_NAMES, output_dict=True)
     print(classification_report(y_true, y_pred, target_names=CLASS_NAMES))
 
     # 混淆矩阵
@@ -75,6 +87,10 @@ def evaluate():
     plt.title('Confusion Matrix')
     plt.savefig('confusion_matrix.png')
     plt.show()
+
+    # 返回评估结果（用于日志记录）
+    from log_training import save_evaluation_results
+    return save_evaluation_results(test_loss, test_acc, report_dict, cm)
 
 
 if __name__ == "__main__":

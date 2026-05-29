@@ -11,3 +11,9 @@
 # 忽略模型文件（二进制大文件，不纳入版本控制）
 *.h5
 *.keras
+
+# Python 缓存文件
+__pycache__/
+*.pyc
+*.pyo
+*.pyd

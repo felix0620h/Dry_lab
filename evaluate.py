@@ -3,8 +3,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.metrics import classification_report, confusion_matrix
-import tensorflow as tf
-from config import MODEL_FINETUNE_PATH, CLASS_NAMES
+from keras.models import load_model
+import keras
+from config import MODEL_FINETUNE_PATH, MODEL_INITIAL_PATH, CLASS_NAMES
 from data_loader import create_generators
 
 
@@ -41,11 +42,14 @@ def evaluate():
 
     # 加载最佳微调模型（如果不存在则尝试初始模型）
     try:
-        model = tf.keras.models.load_model(MODEL_FINETUNE_PATH)
+        model = load_model(MODEL_FINETUNE_PATH)
         print(f"加载模型: {MODEL_FINETUNE_PATH}")
     except:
-        print(f"未找到 {MODEL_FINETUNE_PATH}，尝试加载初始模型 best_model_initial.h5")
-        model = tf.keras.models.load_model("best_model_initial.h5")
+        print(f"未找到 {MODEL_FINETUNE_PATH}，尝试加载初始模型")
+        try:
+            model = load_model(MODEL_INITIAL_PATH)
+        except:
+            model = load_model("best_model_initial.h5")
 
     # 测试集评估
     test_loss, test_acc = model.evaluate(test_gen, verbose=1)
@@ -66,9 +70,9 @@ def evaluate():
     plt.figure(figsize=(8, 6))
     sns.heatmap(cm, annot=True, fmt='d', cmap='Blues',
                 xticklabels=CLASS_NAMES, yticklabels=CLASS_NAMES)
-    plt.xlabel('预测类别')
-    plt.ylabel('真实类别')
-    plt.title('混淆矩阵')
+    plt.xlabel('Predicted Label')
+    plt.ylabel('True Label')
+    plt.title('Confusion Matrix')
     plt.savefig('confusion_matrix.png')
     plt.show()
 

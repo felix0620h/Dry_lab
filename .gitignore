@@ -2,3 +2,8 @@
 *.iml
 *.iws
 *.ipr
+
+# 忽略图片文件
+*.jpg
+*.jpeg
+*.png

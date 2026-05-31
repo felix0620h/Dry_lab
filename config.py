@@ -59,3 +59,16 @@ MODEL_FINETUNE_PATH = "best_model_finetune.keras"
 
 # 随机种子（保证可重复性）
 RANDOM_SEED = 42
+
+# ========================
+# 注意力机制 (CBAM)
+# ========================
+USE_ATTENTION = True       # 是否在骨干网络后加入 CBAM 注意力模块
+CBAM_RATIO = 8             # 通道注意力压缩比
+
+# ========================
+# K-Fold 交叉验证
+# ========================
+N_FOLDS = 5                # 交叉验证折数
+CV_EPOCHS_INITIAL = 30     # CV 第一阶段轮数（样本更多，可适当减少）
+CV_EPOCHS_FINETUNE = 20    # CV 第二阶段轮数

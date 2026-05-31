@@ -147,7 +147,39 @@ python train.py
 
 # 仅评估（需要已有模型）
 python evaluate.py
+
+# K-Fold 交叉验证 + 训练 + 最终测试评估
+python cross_validate.py
 ```
+
+## 新增功能
+
+### 🔬 CBAM 注意力机制（缓解腺癌↔大细胞癌混淆）
+
+在 EfficientNetB0 骨干网络输出后、GlobalAveragePooling 之前，插入了 **CBAM (Convolutional Block Attention Module)**：
+
+```
+骨干特征图 → 通道注意力 → 空间注意力 → GAP → 分类头
+```
+
+- **通道注意力**：学习"哪些特征通道更重要"（如纹理通道 vs 颜色通道）
+- **空间注意力**：学习"图像的哪些区域更关键"（如细胞核区域 vs 背景）
+
+通过 `config.py` 中的 `USE_ATTENTION = True/False` 控制开关。
+
+### 📊 K-Fold 分层交叉验证
+
+将 train + valid 的 685 张图像合并，按类别比例分层划分为 K 折（默认 5 折），每折独立训练并报告：
+
+- 每折验证准确率
+- 平均准确率 ± 标准差
+- 95% 置信区间
+
+运行：`python cross_validate.py`，该脚本依次执行：
+1. K-Fold 交叉验证
+2. 全量数据完整训练
+3. 测试集最终评估
+4. 日志归档（含 CV 结果）
 
 ## 评估
 
@@ -182,7 +214,8 @@ python log_training.py
 ## 已知问题
 
 1. **无 GPU 支持**：当前在 CPU 上运行，训练较慢。若使用 GPU，TensorFlow 需通过 WSL2 或 TensorFlow-DirectML 插件。
-2. **类别混淆**：Adenocarcinoma 和 Large Cell Carcinoma 之间仍存在一定混淆（34/120 的腺癌被误判为大细胞癌）。
+2. ~~**类别混淆**：Adenocarcinoma 和 Large Cell Carcinoma 之间仍存在一定混淆（34/120 的腺癌被误判为大细胞癌）。~~ → **已引入 CBAM 注意力机制缓解**
+3. ~~**未做交叉验证**：仅依赖单次 train/valid 划分评估性能。~~ → **已实现 K-Fold 分层交叉验证**
 
 ## 许可
 

@@ -61,6 +61,12 @@ MODEL_FINETUNE_PATH = "best_model_finetune.keras"
 RANDOM_SEED = 42
 
 # ========================
+# 骨干网络选择
+# ========================
+BACKBONE = 'b0'              # 可选: 'b0', 'b1', 'b2', 'b3' (越大越深，精度越高但更慢)
+FREEZE_LAYER_FRACTION = 0.6  # 微调阶段冻结底层比例 (60% 底层 → 40% 顶层可训练)
+
+# ========================
 # 注意力机制 (CBAM)
 # ========================
 USE_ATTENTION = True       # 是否在骨干网络后加入 CBAM 注意力模块

@@ -1,6 +1,8 @@
 """
 可视化训练日志 — 从 latest.json 读取数据，分别生成多张独立清晰图表
 
+输出目录: visualization/
+
 输出文件:
   - training_curves.png       两阶段训练曲线（准确率 + 损失）
   - confusion_matrix.png      混淆矩阵（数量 + 百分比）
@@ -11,12 +13,20 @@
 import json
 import os
 import numpy as np
+import matplotlib
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 import seaborn as sns
 
-# ============ 配置 ============
+# ============ 全局字体配置（防止 Windows 下乱码） ============
+matplotlib.rcParams['font.family'] = 'sans-serif'
+matplotlib.rcParams['font.sans-serif'] = ['Arial', 'Microsoft YaHei', 'Segoe UI', 'DejaVu Sans']
+matplotlib.rcParams['axes.unicode_minus'] = False
+sns.set_style("whitegrid", {"font.sans-serif": ['Arial', 'Microsoft YaHei', 'Segoe UI', 'DejaVu Sans']})
+
+# ============ 基本配置 ============
 LOG_PATH = os.path.join("training_logs", "latest.json")
+OUTPUT_DIR = "visualization"
 CLASS_NAMES = ['Adenocarcinoma', 'Large Cell\nCarcinoma', 'Squamous Cell\nCarcinoma', 'Normal']
 
 # 调色板
@@ -125,8 +135,12 @@ def plot_training_curves(ax, p1_hist, p2_hist, title="Training Curves"):
     return ax
 
 
-def plot_confusion_matrix(ax, cm, class_names):
-    """子图2: 混淆矩阵（数量 + 百分比）"""
+def plot_confusion_matrix(ax, cm, class_names, annot_fontsize=8):
+    """子图2: 混淆矩阵（数量 + 百分比）
+
+    参数:
+        annot_fontsize: 格子内标注字号
+    """
     cm_percent = cm.astype('float') / cm.sum(axis=1, keepdims=True) * 100
 
     overall_acc = np.trace(cm) / np.sum(cm) * 100
@@ -140,21 +154,22 @@ def plot_confusion_matrix(ax, cm, class_names):
                 cbar_kws={'shrink': 0.75, 'label': 'Count'},
                 ax=ax)
 
-    # 手动标注每个格子：数量 + 百分比
+    # 标注每个格子：数量 + 百分比
     for i in range(cm.shape[0]):
         for j in range(cm.shape[1]):
             count = cm[i, j]
             pct = cm_percent[i, j]
             color = 'white' if cm_percent[i, j] > 50 else 'black'
             ax.text(j + 0.5, i + 0.5, f'{count}\n({pct:.1f}%)',
-                    ha='center', va='center', fontsize=8, color=color, fontweight='bold')
+                    ha='center', va='center', fontsize=annot_fontsize, color=color, fontweight='bold')
 
     ax.set_xlabel('Predicted Label', fontsize=10, fontweight='bold')
     ax.set_ylabel('True Label', fontsize=10, fontweight='bold')
     ax.set_title(f'Confusion Matrix  (Overall Acc: {overall_acc:.1f}%)',
                  fontsize=13, fontweight='bold', pad=10)
-    ax.set_xticklabels(ax.get_xticklabels(), rotation=25, ha='right', fontsize=7)
-    ax.set_yticklabels(ax.get_yticklabels(), rotation=0, fontsize=7)
+    tick_fs = max(7, annot_fontsize - 1)
+    ax.set_xticklabels(ax.get_xticklabels(), rotation=25, ha='right', fontsize=tick_fs)
+    ax.set_yticklabels(ax.get_yticklabels(), rotation=0, fontsize=tick_fs)
     return ax
 
 
@@ -229,8 +244,9 @@ def _make_title(cfg, log):
 
 
 def save_fig(fig, filename, dpi=200):
-    """保存图表并打印路径"""
-    path = filename
+    """保存图表到 OUTPUT_DIR 并打印路径"""
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    path = os.path.join(OUTPUT_DIR, filename)
     fig.savefig(path, dpi=dpi, bbox_inches='tight')
     plt.close(fig)
     print(f"  ✅ saved: {path}")
@@ -278,23 +294,12 @@ def gen_confusion_matrix(log):
     fig, ax = plt.subplots(figsize=(9, 8))
     fig.suptitle(_make_title(cfg, log), fontsize=13, fontweight='bold', y=1.02)
 
-    plot_confusion_matrix(ax, cm, CLASS_NAMES)
+    # 通过 annot_fontsize 统一控制字号，避免重复标注
+    plot_confusion_matrix(ax, cm, CLASS_NAMES, annot_fontsize=13)
 
-    # 调大字体
+    # 调大轴标签
     ax.set_xlabel('Predicted Label', fontsize=13, fontweight='bold')
     ax.set_ylabel('True Label', fontsize=13, fontweight='bold')
-    ax.set_xticklabels(ax.get_xticklabels(), rotation=25, ha='right', fontsize=10)
-    ax.set_yticklabels(ax.get_yticklabels(), rotation=0, fontsize=10)
-
-    # 重绘标注（更大字体）
-    cm_percent = cm.astype('float') / cm.sum(axis=1, keepdims=True) * 100
-    for i in range(cm.shape[0]):
-        for j in range(cm.shape[1]):
-            count = cm[i, j]
-            pct = cm_percent[i, j]
-            color = 'white' if cm_percent[i, j] > 50 else 'black'
-            ax.text(j + 0.5, i + 0.5, f'{count}\n({pct:.1f}%)',
-                    ha='center', va='center', fontsize=12, color=color, fontweight='bold')
 
     fig.tight_layout()
     save_fig(fig, 'confusion_matrix.png')

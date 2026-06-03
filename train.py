@@ -8,7 +8,8 @@ from config import (
     EPOCHS_INITIAL, EPOCHS_FINETUNE, INITIAL_LR, FINETUNE_LR, MIN_LR,
     MODEL_INITIAL_PATH, MODEL_FINETUNE_PATH, RANDOM_SEED,
     LABEL_SMOOTHING, CLASS_WEIGHTS, CLASS_NAMES,
-    N_FOLDS, CV_EPOCHS_INITIAL, CV_EPOCHS_FINETUNE, USE_ATTENTION
+    N_FOLDS, CV_EPOCHS_INITIAL, CV_EPOCHS_FINETUNE, USE_ATTENTION,
+    BACKBONE, FREEZE_LAYER_FRACTION
 )
 from data_loader import create_generators, collect_all_image_paths, create_fold_generators
 from model import build_model
@@ -90,9 +91,11 @@ def train():
     # ---------- 第二阶段：解冻顶层进行微调 ----------
     print("===== 第二阶段：微调模型（解冻EfficientNet后半部分）=====")
     base_model.trainable = True
-    # 冻结前 150 层（保留底层特征），解冻后层
-    for layer in base_model.layers[:150]:
+    # 动态冻结：依据 FREEZE_LAYER_FRACTION 比例冻结底层，解冻顶层
+    freeze_count = int(len(base_model.layers) * FREEZE_LAYER_FRACTION)
+    for layer in base_model.layers[:freeze_count]:
         layer.trainable = False
+    print(f"   骨干共 {len(base_model.layers)} 层，冻结前 {freeze_count} 层，解冻后 {len(base_model.layers) - freeze_count} 层")
 
     lr_schedule_finetune = WarmupCosineDecay(
         initial_lr=FINETUNE_LR,
@@ -165,7 +168,8 @@ def _train_single_fold(train_paths, train_labels, val_paths, val_labels, fold_id
 
     # ---- 第二阶段：微调 ----
     base_model.trainable = True
-    for layer in base_model.layers[:150]:
+    freeze_count = int(len(base_model.layers) * FREEZE_LAYER_FRACTION)
+    for layer in base_model.layers[:freeze_count]:
         layer.trainable = False
 
     lr_schedule_ft = WarmupCosineDecay(

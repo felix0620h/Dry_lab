@@ -1,8 +1,31 @@
 # model.py
 import tensorflow as tf
 from keras import layers, models, regularizers, saving
-from keras.applications import EfficientNetB0
-from config import IMG_SIZE, NUM_CLASSES, DROPOUT_RATE, L2_REG, USE_ATTENTION, CBAM_RATIO
+from keras.applications import EfficientNetB0, EfficientNetB1, EfficientNetB2, EfficientNetB3
+from config import IMG_SIZE, NUM_CLASSES, DROPOUT_RATE, L2_REG, USE_ATTENTION, CBAM_RATIO, BACKBONE
+
+
+# ============================================================
+# 骨干网络工厂
+# ============================================================
+EFFICIENTNET_MAP = {
+    'b0': EfficientNetB0,
+    'b1': EfficientNetB1,
+    'b2': EfficientNetB2,
+    'b3': EfficientNetB3,
+}
+
+
+def get_backbone(backbone_name='b0', input_shape=(IMG_SIZE, IMG_SIZE, 3)):
+    """根据名称获取 EfficientNet 骨干网络"""
+    if backbone_name not in EFFICIENTNET_MAP:
+        raise ValueError(f"不支持的骨干网络: {backbone_name}，可选: {list(EFFICIENTNET_MAP.keys())}")
+    net_fn = EFFICIENTNET_MAP[backbone_name]
+    return net_fn(
+        weights='imagenet',
+        include_top=False,
+        input_shape=input_shape
+    )
 
 
 # ============================================================
@@ -76,19 +99,19 @@ def cbam_block(input_tensor, ratio=8):
     return output
 
 
-def build_model(freeze_backbone=True, use_attention=True):
+def build_model(freeze_backbone=True, use_attention=True, backbone_name=None):
     """
-    构建 EfficientNetB0 迁移学习模型。
+    构建 EfficientNet 迁移学习模型。
 
     参数:
         freeze_backbone: True=冻结骨干（第一阶段），False=可训练（第二阶段微调）
         use_attention:   是否在骨干后插入 CBAM 注意力模块
+        backbone_name:   骨干网络名称 ('b0','b1','b2','b3')，默认使用 config.BACKBONE
     """
-    base_model = EfficientNetB0(
-        weights='imagenet',
-        include_top=False,
-        input_shape=(IMG_SIZE, IMG_SIZE, 3)
-    )
+    if backbone_name is None:
+        backbone_name = BACKBONE
+
+    base_model = get_backbone(backbone_name)
     base_model.trainable = not freeze_backbone
 
     inputs = layers.Input(shape=(IMG_SIZE, IMG_SIZE, 3))
@@ -115,5 +138,10 @@ def build_model(freeze_backbone=True, use_attention=True):
 
 
 if __name__ == "__main__":
-    model, _ = build_model(freeze_backbone=True)
+    import sys
+    test_backbone = sys.argv[1] if len(sys.argv) > 1 else BACKBONE
+    print(f"构建 EfficientNet{test_backbone.upper()} 模型...")
+    model, base_model = build_model(freeze_backbone=True, backbone_name=test_backbone)
     model.summary()
+    print(f"\n骨干网络层数: {len(base_model.layers)}")
+    print(f"模型总参数量: {model.count_params():,}")

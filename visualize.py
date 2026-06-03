@@ -1,5 +1,12 @@
 """
-可视化训练日志 — 从 latest.json 读取数据，生成多面板综合图表
+可视化训练日志 — 从 latest.json 读取数据，分别生成多张独立清晰图表
+
+输出文件:
+  - training_curves.png       两阶段训练曲线（准确率 + 损失）
+  - confusion_matrix.png      混淆矩阵（数量 + 百分比）
+  - classification_report.png  分类指标柱状图（Precision / Recall / F1）
+  - metrics_radar.png          雷达图（各类指标多维对比）
+  - dataset_distribution.png   数据集分布 + 超参配置
 """
 import json
 import os
@@ -10,7 +17,6 @@ import seaborn as sns
 
 # ============ 配置 ============
 LOG_PATH = os.path.join("training_logs", "latest.json")
-SAVE_PATH = "visualization_summary.png"
 CLASS_NAMES = ['Adenocarcinoma', 'Large Cell\nCarcinoma', 'Squamous Cell\nCarcinoma', 'Normal']
 
 # 调色板
@@ -213,125 +219,232 @@ def plot_metrics_radar(ax, report):
     return ax
 
 
-def add_summary_box(fig, report, test_acc, test_loss):
-    """在图表底部添加摘要信息"""
-    macro_f1 = report['macro avg']['f1-score']
-    weighted_f1 = report['weighted avg']['f1-score']
-    summary_text = (
-        f"Test Accuracy: {test_acc:.1%}  |  "
-        f"Test Loss: {test_loss:.4f}  |  "
-        f"Macro Avg F1: {macro_f1:.3f}  |  "
-        f"Weighted Avg F1: {weighted_f1:.3f}"
-    )
-    fig.text(0.5, 0.01, summary_text, ha='center', fontsize=10,
-             bbox=dict(boxstyle='round,pad=0.4', facecolor='#F5F5F5', edgecolor='#BDBDBD'))
+def _make_title(cfg, log):
+    """生成统一的标题字符串"""
+    return (f'Chest Cancer Classification — EfficientNetB0\n'
+            f'{log["timestamp"]}  |  '
+            f'Batch {cfg["batch_size"]}  |  '
+            f'LR {cfg["initial_lr"]}→{cfg["finetune_lr"]}  |  '
+            f'Label Smooth: {cfg["label_smoothing"]}')
 
 
-def main():
-    # 加载数据
-    log = load_log(LOG_PATH)
-    cfg = log['config']
+def save_fig(fig, filename, dpi=200):
+    """保存图表并打印路径"""
+    path = filename
+    fig.savefig(path, dpi=dpi, bbox_inches='tight')
+    plt.close(fig)
+    print(f"  ✅ saved: {path}")
+
+
+# ============================================================
+# 独立生成函数（每张图单独输出）
+# ============================================================
+
+def gen_training_curves(log):
+    """图1: 两阶段训练曲线（准确率 + 损失）"""
     p1_hist = log['phase1_history']
     p2_hist = log['phase2_history']
-    eval_data = log['evaluation']
-    cm = np.array(eval_data['confusion_matrix'])
-    report = eval_data['classification_report']
-    test_acc = eval_data['test_accuracy']
-    test_loss = eval_data['test_loss']
+    cfg = log['config']
 
-    # 创建画布
-    fig = plt.figure(figsize=(16, 18))
-    gs = fig.add_gridspec(3, 2, hspace=0.28, wspace=0.25,
-                          height_ratios=[1, 1, 0.8],
-                          left=0.06, right=0.95, top=0.93, bottom=0.06)
+    fig, ax = plt.subplots(figsize=(14, 6))
+    fig.suptitle(_make_title(cfg, log), fontsize=13, fontweight='bold', y=1.02)
 
-    # 标题
-    fig.suptitle(f'Chest Cancer Classification — EfficientNetB0\n'
-                 f'Trained: {log["timestamp"]}  |  '
-                 f'Batch Size: {cfg["batch_size"]}  |  '
-                 f'LR: {cfg["initial_lr"]} → {cfg["finetune_lr"]}  |  '
-                 f'Label Smoothing: {cfg["label_smoothing"]}',
-                 fontsize=14, fontweight='bold', y=0.975)
+    plot_training_curves(ax, p1_hist, p2_hist, title="Two-Phase Training Curves")
 
-    # === 子图 1: 训练曲线 ===
-    ax1 = fig.add_subplot(gs[0, :])
-    plot_training_curves(ax1, p1_hist, p2_hist)
+    # 单独图例更大更清晰
+    ax.set_xlabel('Epoch', fontsize=12)
+    ax.set_ylabel('Accuracy', fontsize=12)
+    ax.tick_params(labelsize=10)
 
-    # === 子图 2: 混淆矩阵 ===
-    ax2 = fig.add_subplot(gs[1, 0])
-    plot_confusion_matrix(ax2, cm, CLASS_NAMES)
+    # 调整第二个 y 轴标签大小
+    ax2 = fig.axes[1]
+    ax2.set_ylabel('Loss', fontsize=12)
+    ax2.tick_params(labelsize=10)
 
-    # === 子图 3: 分类报告柱状图 ===
-    ax3 = fig.add_subplot(gs[1, 1])
-    plot_classification_report(ax3, report, CLASS_NAMES)
+    # 图例调整
+    lines = ax.get_lines() + ax2.get_lines()
+    labels = ['Train Accuracy', 'Val Accuracy', 'Train Loss', 'Val Loss']
+    ax.legend(lines, labels, loc='lower left', fontsize=10, ncol=2, framealpha=0.9)
 
-    # === 子图 4: 雷达图 ===
-    ax4 = fig.add_subplot(gs[2, 0], projection='polar')
-    plot_metrics_radar(ax4, report)
+    fig.tight_layout()
+    save_fig(fig, 'training_curves.png')
 
-    # === 子图 5: 数据分布 + 关键配置 ===
-    ax5 = fig.add_subplot(gs[2, 1])
-    ax5.axis('off')
 
-    # 数据集分布
+def gen_confusion_matrix(log):
+    """图2: 混淆矩阵"""
+    cm = np.array(log['evaluation']['confusion_matrix'])
+    cfg = log['config']
+
+    fig, ax = plt.subplots(figsize=(9, 8))
+    fig.suptitle(_make_title(cfg, log), fontsize=13, fontweight='bold', y=1.02)
+
+    plot_confusion_matrix(ax, cm, CLASS_NAMES)
+
+    # 调大字体
+    ax.set_xlabel('Predicted Label', fontsize=13, fontweight='bold')
+    ax.set_ylabel('True Label', fontsize=13, fontweight='bold')
+    ax.set_xticklabels(ax.get_xticklabels(), rotation=25, ha='right', fontsize=10)
+    ax.set_yticklabels(ax.get_yticklabels(), rotation=0, fontsize=10)
+
+    # 重绘标注（更大字体）
+    cm_percent = cm.astype('float') / cm.sum(axis=1, keepdims=True) * 100
+    for i in range(cm.shape[0]):
+        for j in range(cm.shape[1]):
+            count = cm[i, j]
+            pct = cm_percent[i, j]
+            color = 'white' if cm_percent[i, j] > 50 else 'black'
+            ax.text(j + 0.5, i + 0.5, f'{count}\n({pct:.1f}%)',
+                    ha='center', va='center', fontsize=12, color=color, fontweight='bold')
+
+    fig.tight_layout()
+    save_fig(fig, 'confusion_matrix.png')
+
+
+def gen_classification_report(log):
+    """图3: 分类指标柱状图"""
+    report = log['evaluation']['classification_report']
+    cfg = log['config']
+
+    fig, ax = plt.subplots(figsize=(10, 7))
+    fig.suptitle(_make_title(cfg, log), fontsize=13, fontweight='bold', y=1.02)
+
+    plot_classification_report(ax, report, CLASS_NAMES)
+
+    # 调大字体和数值标注
+    ax.set_ylabel('Score', fontsize=12)
+    ax.tick_params(labelsize=10)
+    ax.legend(fontsize=10, loc='lower right', framealpha=0.9)
+
+    # 重新标注数值（更大）
+    for bar_group in ax.containers:
+        for bar in bar_group:
+            height = bar.get_height()
+            ax.text(bar.get_x() + bar.get_width() / 2., height + 0.01,
+                    f'{height:.2f}', ha='center', va='bottom', fontsize=8, fontweight='bold')
+
+    fig.tight_layout()
+    save_fig(fig, 'classification_report.png')
+
+
+def gen_radar(log):
+    """图4: 雷达图"""
+    report = log['evaluation']['classification_report']
+    cfg = log['config']
+
+    fig, ax = plt.subplots(figsize=(8, 8), subplot_kw={'projection': 'polar'})
+    fig.suptitle(_make_title(cfg, log), fontsize=13, fontweight='bold', y=1.05)
+
+    plot_metrics_radar(ax, report)
+
+    # 调大字体
+    ax.tick_params(labelsize=10)
+    ax.legend(fontsize=10, loc='lower right', bbox_to_anchor=(1.3, 0))
+
+    fig.tight_layout()
+    save_fig(fig, 'metrics_radar.png')
+
+
+def gen_dataset_distribution(log):
+    """图5: 数据集分布 + 超参配置"""
+    report = log['evaluation']['classification_report']
+    cfg = log['config']
+
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6),
+                                    gridspec_kw={'width_ratios': [1, 1.2]})
+    fig.suptitle(_make_title(cfg, log), fontsize=13, fontweight='bold', y=1.02)
+
+    # ---- 左图: 数据集分布 ----
     support_vals = [report['adenocarcinoma']['support'],
                     report['large.cell.carcinoma']['support'],
                     report['squamous.cell.carcinoma']['support'],
                     report['normal']['support']]
     short_names = ['Adeno', 'Large Cell', 'Squamous', 'Normal']
-
-    # 训练集样本数
     train_samples = [195, 115, 155, 148]
     valid_samples = [23, 21, 15, 13]
 
     bar_width = 0.25
     x = np.arange(len(short_names))
 
-    ax5_sub = ax5.inset_axes([0.05, 0.45, 0.9, 0.5])
-    bars1 = ax5_sub.bar(x - bar_width, train_samples, bar_width, color='#1976D2', label='Train', edgecolor='white')
-    bars2 = ax5_sub.bar(x, valid_samples, bar_width, color='#FFA000', label='Valid', edgecolor='white')
-    bars3 = ax5_sub.bar(x + bar_width, support_vals, bar_width, color='#388E3C', label='Test', edgecolor='white')
+    bars1 = ax1.bar(x - bar_width, train_samples, bar_width, color='#1976D2', label='Train', edgecolor='white')
+    bars2 = ax1.bar(x, valid_samples, bar_width, color='#FFA000', label='Valid', edgecolor='white')
+    bars3 = ax1.bar(x + bar_width, support_vals, bar_width, color='#388E3C', label='Test', edgecolor='white')
 
+    # 标注数值
     for bars in [bars1, bars2, bars3]:
         for bar in bars:
             h = bar.get_height()
-            ax5_sub.text(bar.get_x() + bar.get_width() / 2., h + 1,
-                         f'{int(h)}', ha='center', va='bottom', fontsize=6.5)
+            ax1.text(bar.get_x() + bar.get_width() / 2., h + 2,
+                     f'{int(h)}', ha='center', va='bottom', fontsize=9, fontweight='bold')
 
-    ax5_sub.set_xticks(x)
-    ax5_sub.set_xticklabels(short_names, fontsize=7.5)
-    ax5_sub.set_ylabel('Sample Count', fontsize=9)
-    ax5_sub.set_title('Dataset Distribution', fontsize=10, fontweight='bold')
-    ax5_sub.legend(fontsize=7, loc='upper right')
-    ax5_sub.grid(True, axis='y', alpha=0.3)
+    ax1.set_xticks(x)
+    ax1.set_xticklabels(short_names, fontsize=11)
+    ax1.set_ylabel('Sample Count', fontsize=12)
+    ax1.set_title('Dataset Distribution', fontsize=14, fontweight='bold', pad=10)
+    ax1.legend(fontsize=10)
+    ax1.grid(True, axis='y', alpha=0.3)
 
-    # 配置信息
+    # ---- 右图: 超参配置 ----
+    ax2.axis('off')
     config_lines = [
         "Training Configuration",
-        "─" * 28,
-        f"Image Size:     {cfg['img_size']}×{cfg['img_size']}",
-        f"Batch Size:     {cfg['batch_size']}",
-        f"Epochs:         {cfg['epochs_initial']} (P1) + {cfg['epochs_finetune']} (P2)",
-        f"Initial LR:     {cfg['initial_lr']}",
-        f"Fine-tune LR:   {cfg['finetune_lr']}",
-        f"Dropout:        {cfg['dropout_rate']}",
-        f"L2 Reg:         {cfg['l2_reg']}",
-        f"Label Smooth:   {cfg['label_smoothing']}",
-        f"Class Weights:  {cfg['class_weights']}",
+        "=" * 32,
+        f"Image Size         {cfg['img_size']} × {cfg['img_size']}",
+        f"Batch Size         {cfg['batch_size']}",
+        f"Epochs             {cfg['epochs_initial']} (P1) + {cfg['epochs_finetune']} (P2)",
+        f"Initial LR         {cfg['initial_lr']}",
+        f"Fine-tune LR       {cfg['finetune_lr']}",
+        f"Min LR             1e-7",
+        f"Dropout            {cfg['dropout_rate']}",
+        f"L2 Regularization  {cfg['l2_reg']}",
+        f"Label Smoothing    {cfg['label_smoothing']}",
+        "",
+        "Class Weights:",
+        f"  Adenocarcinoma        {cfg['class_weights']['0']}",
+        f"  Large Cell Carcinoma  {cfg['class_weights']['1']}",
+        f"  Squamous Cell Carcinoma {cfg['class_weights']['2']}",
+        f"  Normal                {cfg['class_weights']['3']}",
+        "",
+        "Model Architecture:",
+        f"  Backbone:     EfficientNetB0",
+        f"  Attention:    CBAM (ratio={cfg.get('cbam_ratio', 8)})",
+        f"  Dropout:      {cfg['dropout_rate']}",
+        "",
+        "Test Results:",
+        f"  Accuracy: {log['evaluation']['test_accuracy']:.2%}",
+        f"  Loss:     {log['evaluation']['test_loss']:.4f}",
     ]
-    text_y = 0.38
+
+    text_y = 0.92
     for line in config_lines:
-        ax5.text(0.05, text_y, line, fontsize=7, fontfamily='monospace',
-                 transform=ax5.transAxes, va='top')
-        text_y -= 0.05
+        ax2.text(0.05, text_y, line, fontsize=11, fontfamily='monospace',
+                 transform=ax2.transAxes, va='top',
+                 color='#333333')
+        text_y -= 0.045
 
-    # 底部摘要
-    add_summary_box(fig, report, test_acc, test_loss)
+    fig.tight_layout()
+    save_fig(fig, 'dataset_distribution.png')
 
-    # 保存
-    plt.savefig(SAVE_PATH, dpi=200, bbox_inches='tight')
-    print(f"✅ 可视化已保存至: {SAVE_PATH}")
-    plt.show()
+
+def main():
+    # 加载数据
+    log = load_log(LOG_PATH)
+    cfg = log['config']
+
+    print("=" * 55)
+    print("  Generating visualizations from training logs...")
+    print("=" * 55)
+    print()
+
+    gen_training_curves(log)
+    gen_confusion_matrix(log)
+    gen_classification_report(log)
+    gen_radar(log)
+    gen_dataset_distribution(log)
+
+    print()
+    print("=" * 55)
+    print(f"  ✅ All 5 charts saved to current directory")
+    print("=" * 55)
 
 
 if __name__ == "__main__":
